@@ -121,3 +121,15 @@ app.include_router(ws.router, prefix="/api")
 app.include_router(wishlists.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    logger.info("Starting uvicorn on %s:%s", settings.host, settings.port)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug,
+    )
