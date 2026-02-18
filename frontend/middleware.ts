@@ -2,23 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const publicPaths = ["/login", "/register", "/public"];
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (publicPaths.some((p) => pathname.startsWith(p))) return NextResponse.next();
-
-  if (pathname === "/" || pathname === "/dashboard" || pathname.startsWith("/wishlist/")) {
-    try {
-      const res = await fetch(`${apiBase}/auth/me`, {
-        credentials: "include",
-        headers: request.headers.get("cookie") ? { cookie: request.headers.get("cookie")! } : {},
-      });
-      if (!res.ok) return NextResponse.redirect(new URL("/login", request.url));
-    } catch {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
+  // Protected routes: auth is checked client-side via api.get("/auth/me") with Bearer token from sessionStorage.
+  // Middleware runs on server and has no access to sessionStorage, so we cannot pass the token here.
   return NextResponse.next();
 }
 
