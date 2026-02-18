@@ -40,11 +40,19 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (e) {
+    const msg = e instanceof TypeError && e.message === "Failed to fetch"
+      ? "Network error. API unreachable — check backend is up and NEXT_PUBLIC_API_URL."
+      : e instanceof Error ? e.message : "Request failed";
+    throw new Error(msg);
+  }
   if (res.status === 401) clearAccessToken();
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
