@@ -49,13 +49,22 @@ _OG_DESCRIPTION_ALT = re.compile(
     r'<meta[^>]+content=(["\'])(.+?)\1[^>]+property=(["\'])og:description\3',
     re.IGNORECASE | re.DOTALL,
 )
-# Standard HTML meta name="description" (often after <title> in document)
+# meta name="description" — разные порядки атрибутов, допускаем data-hid и др.
 _META_NAME_DESCRIPTION = re.compile(
-    r'<meta[^>]+name=(["\'])description\1[^>]+content=(["\'])(.+?)\2',
+    r'<meta[^>]*\bname\s*=\s*(["\'])description\1[^>]*\bcontent\s*=\s*\1([^\1]*?)\1',
     re.IGNORECASE | re.DOTALL,
 )
 _META_NAME_DESCRIPTION_ALT = re.compile(
-    r'<meta[^>]+content=(["\'])(.+?)\1[^>]+name=(["\'])description\3',
+    r'<meta[^>]*\bcontent\s*=\s*(["\'])(.+?)\1[^>]*\bname\s*=\s*(["\'])description\3',
+    re.IGNORECASE | re.DOTALL,
+)
+# Все og:image (несколько тегов на странице — WB, Ozon и т.д.)
+_OG_IMAGE_ALL = re.compile(
+    r'<meta[^>]*\bproperty\s*=\s*(["\'])og:image\1[^>]*\bcontent\s*=\s*(["\'])(.+?)\2',
+    re.IGNORECASE | re.DOTALL,
+)
+_OG_IMAGE_ALL_ALT = re.compile(
+    r'<meta[^>]*\bcontent\s*=\s*(["\'])(.+?)\1[^>]*\bproperty\s*=\s*(["\'])og:image\3',
     re.IGNORECASE | re.DOTALL,
 )
 _TITLE_TAG = re.compile(r"<title[^>]*>\s*(.+?)\s*</title>", re.IGNORECASE | re.DOTALL)
@@ -90,6 +99,40 @@ _PRICE_PATTERNS = [
         re.IGNORECASE | re.DOTALL,
     ),
 ]
+
+
+def _normalize_image_url(raw: str) -> str:
+    """Protocol-relative // → https:; trim to 2048."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if s.startswith("//"):
+        s = "https:" + s
+    return s[:2048]
+
+
+def _extract_all_og_images(html: str) -> list[str]:
+    """Все og:image из страницы (несколько тегов — WB, Ozon). Возвращаем нормализованные URL."""
+    urls: list[str] = []
+    for pattern, content_group in ((_OG_IMAGE_ALL, 3), (_OG_IMAGE_ALL_ALT, 2)):
+        for m in pattern.finditer(html):
+            if m.lastindex >= content_group:
+                raw = (m.group(content_group) or "").strip()
+                if raw:
+                    u = _normalize_image_url(raw)
+                    if u and u not in urls:
+                        urls.append(u)
+    return urls
+
+
+def _best_image(urls: list[str]) -> str | None:
+    """Предпочитаем полный https URL (часто товар), не // (часто лого)."""
+    if not urls:
+        return None
+    for u in urls:
+        if u.startswith("https://") and len(u) > 30:
+            return u
+    return urls[0]
 
 
 def _extract_og(html: str, pattern: re.Pattern, alt_pattern: re.Pattern) -> str | None:
@@ -135,14 +178,14 @@ def _extract_price(html: str) -> Decimal | None:
 
 
 def _extract_meta_name_description(html: str) -> str | None:
-    """Extract <meta name="description" content="..."> only from the part AFTER <title> (opening tag)."""
+    """<meta name="description" content="..."> (в т.ч. с data-hid и др.), только после <title."""
     after_title = html
     idx = html.lower().find("<title")
     if idx != -1:
         after_title = html[idx + len("<title") :]
     m = _META_NAME_DESCRIPTION.search(after_title)
-    if m and m.lastindex >= 3:
-        raw = (m.group(3) or "").strip()
+    if m and m.lastindex >= 2:
+        raw = (m.group(2) or "").strip()
         return raw[:10000] if raw else None
     m = _META_NAME_DESCRIPTION_ALT.search(after_title)
     if m and m.lastindex >= 2:
@@ -154,8 +197,12 @@ def _extract_meta_name_description(html: str) -> str | None:
 def _parse_html(html: str, product_url: str) -> ProductPreview:
     """Parse first MAX_BYTES of HTML into ProductPreview with preview_quality and missing_fields."""
     title = _extract_og(html, _OG_TITLE, _OG_TITLE_ALT) or _extract_title_tag(html)
-    # Image: og:image (Telegram and most link previews use this)
-    image_url = _extract_og(html, _OG_IMAGE, _OG_IMAGE_ALT)
+    # Image: все og:image, // → https, предпочитаем полный https URL (товар, не лого)
+    all_images = _extract_all_og_images(html)
+    image_url = _best_image(all_images) if all_images else None
+    if not image_url:
+        raw = _extract_og(html, _OG_IMAGE, _OG_IMAGE_ALT)
+        image_url = _normalize_image_url(raw) if raw else None
     # Description: ONLY <meta name="description"> and only after </title>
     description = _extract_meta_name_description(html)
     price = _extract_price(html)
