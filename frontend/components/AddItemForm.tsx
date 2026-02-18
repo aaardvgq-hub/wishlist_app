@@ -48,7 +48,7 @@ export function AddItemForm({
       if (preview.description != null) setDescription(preview.description);
       if (preview.image_url != null) setImageUrl(preview.image_url);
       if (preview.price != null && preview.price !== "") setTargetPrice(String(preview.price));
-      if (!preview.image_url) setError("No preview image. Use a link with og:image (e.g. shop, Telegram).");
+      if (!preview.image_url) setError(""); // image optional
     } catch {
       setError("Could not load link preview. Check the URL.");
     } finally {
@@ -72,11 +72,13 @@ export function AddItemForm({
     };
   }, [productUrl, fetchMetadata]);
 
+  const canSubmit = title.trim() !== "" && productUrl.trim() !== "" && targetPrice.trim() !== "" && !loading && !fetchingMeta;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!imageUrl.trim()) {
-      setError("Preview image is required. Enter a product URL and wait for the image to load.");
+    if (!title.trim() || !productUrl.trim() || !targetPrice.trim()) {
+      setError("Fill in Title, Product URL and Target price.");
       return;
     }
     setLoading(true);
@@ -107,7 +109,7 @@ export function AddItemForm({
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Your own title for this item" />
         </div>
         <div>
-          <label className="mb-1 block text-sm text-gray-700">Product URL (required for preview)</label>
+          <label className="mb-1 block text-sm text-gray-700">Product URL (required)</label>
           <Input
             type="url"
             value={productUrl}
@@ -129,7 +131,7 @@ export function AddItemForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm text-gray-700">Preview image (required)</label>
+          <label className="mb-1 block text-sm text-gray-700">Preview image (from link)</label>
           {imageUrl ? (
             <img src={imageUrl} alt="" className="h-32 w-full rounded-lg object-contain bg-gray-100" />
           ) : (
@@ -139,13 +141,14 @@ export function AddItemForm({
           )}
         </div>
         <div>
-          <label className="mb-1 block text-sm text-gray-700">Target price (optional)</label>
+          <label className="mb-1 block text-sm text-gray-700">Target price (required)</label>
           <Input
             type="text"
             inputMode="decimal"
             value={targetPrice}
             onChange={(e) => setTargetPrice(e.target.value)}
             placeholder="0"
+            required
           />
         </div>
         <label className="flex items-center gap-2">
@@ -160,7 +163,7 @@ export function AddItemForm({
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <div className="mt-4 flex gap-2">
-        <Button type="submit" disabled={loading || !imageUrl.trim() || fetchingMeta}>
+        <Button type="submit" disabled={!canSubmit}>
           {loading ? "Adding…" : "Add"}
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
