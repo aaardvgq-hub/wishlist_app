@@ -49,6 +49,24 @@ _OG_DESCRIPTION_ALT = re.compile(
     r'<meta[^>]+content=(["\'])(.+?)\1[^>]+property=(["\'])og:description\3',
     re.IGNORECASE | re.DOTALL,
 )
+# Standard HTML meta name="description" (often after <title> in document)
+_META_NAME_DESCRIPTION = re.compile(
+    r'<meta[^>]+name=(["\'])description\1[^>]+content=(["\'])(.+?)\2',
+    re.IGNORECASE | re.DOTALL,
+)
+_META_NAME_DESCRIPTION_ALT = re.compile(
+    r'<meta[^>]+content=(["\'])(.+?)\1[^>]+name=(["\'])description\3',
+    re.IGNORECASE | re.DOTALL,
+)
+# Twitter card image (Telegram and others use these too)
+_TWITTER_IMAGE = re.compile(
+    r'<meta[^>]+property=(["\'])twitter:image\1[^>]+content=(["\'])(.+?)\2',
+    re.IGNORECASE | re.DOTALL,
+)
+_TWITTER_IMAGE_ALT = re.compile(
+    r'<meta[^>]+content=(["\'])(.+?)\1[^>]+property=(["\'])twitter:image\3',
+    re.IGNORECASE | re.DOTALL,
+)
 _TITLE_TAG = re.compile(r"<title[^>]*>\s*(.+?)\s*</title>", re.IGNORECASE | re.DOTALL)
 # Price: og:price, product:price:amount, itemprop="price", or name="price"
 _PRICE_PATTERNS = [
@@ -125,11 +143,30 @@ def _extract_price(html: str) -> Decimal | None:
     return None
 
 
+def _extract_meta_name_description(html: str) -> str | None:
+    """Extract <meta name="description" content="..."> (primary source for description)."""
+    m = _META_NAME_DESCRIPTION.search(html)
+    if m and m.lastindex >= 3:
+        raw = (m.group(3) or "").strip()
+        return raw[:10000] if raw else None
+    m = _META_NAME_DESCRIPTION_ALT.search(html)
+    if m and m.lastindex >= 2:
+        raw = (m.group(2) or "").strip()
+        return raw[:10000] if raw else None
+    return None
+
+
 def _parse_html(html: str, product_url: str) -> ProductPreview:
     """Parse first MAX_BYTES of HTML into ProductPreview with preview_quality and missing_fields."""
     title = _extract_og(html, _OG_TITLE, _OG_TITLE_ALT) or _extract_title_tag(html)
-    image_url = _extract_og(html, _OG_IMAGE, _OG_IMAGE_ALT)
-    description = _extract_og(html, _OG_DESCRIPTION, _OG_DESCRIPTION_ALT)
+    # Image: og:image first (Telegram etc.), then twitter:image
+    image_url = _extract_og(html, _OG_IMAGE, _OG_IMAGE_ALT) or _extract_og(
+        html, _TWITTER_IMAGE, _TWITTER_IMAGE_ALT
+    )
+    # Description: strict <meta name="description"> first, then og:description
+    description = _extract_meta_name_description(html) or _extract_og(
+        html, _OG_DESCRIPTION, _OG_DESCRIPTION_ALT
+    )
     price = _extract_price(html)
     has_title = bool(title)
     has_image = bool(image_url)
