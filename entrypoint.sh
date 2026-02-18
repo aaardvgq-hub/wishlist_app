@@ -1,12 +1,12 @@
-#!/bin/bash
-set -e
+#!/bin/sh
+# entrypoint.sh — запускает миграции и uvicorn
 
-# Берём порт из окружения Railway, если не задан — дефолт 8080
-PORT=${PORT:-8080}
+# Подставляем порт из ENV, по умолчанию 8000
+PORT=${PORT:-8000}
 
 echo "Starting migrations..."
 alembic upgrade head
+echo "Migrations finished."
 
-echo "Starting Uvicorn on port $PORT..."
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
-chmod +x entrypoint.sh
+# Запускаем uvicorn на нужном порту
+exec uvicorn app.main:app --host 0.0.0.0 --port $PORT
