@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@/lib/types";
-import { api } from "@/lib/api";
+import { api, clearAccessToken } from "@/lib/api";
 
 interface AuthState {
   user: User | null;
@@ -26,6 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await api.post("/auth/logout");
     } finally {
+      clearAccessToken();
       set({ user: null });
     }
   },

@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.dependencies.auth import get_current_user
 from app.dependencies.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenMessage
+from app.schemas.auth import AuthUserResponse, LoginRequest, RegisterRequest, TokenMessage
 from app.schemas.user import UserResponse
 from app.services.auth import AuthService
 
@@ -43,13 +43,13 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(settings.refresh_token_cookie_name, path="/")
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=AuthUserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest,
     response: Response,
     session: AsyncSession = Depends(get_db),
-) -> UserResponse:
-    """Register a new user and set auth cookies (logged in after register)."""
+) -> AuthUserResponse:
+    """Register a new user; set auth cookies and return access_token for cross-origin (e.g. Authorization header)."""
     service = AuthService(session)
     if await service.email_taken(payload.email):
         raise HTTPException(
@@ -59,16 +59,16 @@ async def register(
     user = await service.register(payload)
     access, refresh, _ = await service.create_tokens_for_user(user)
     _set_auth_cookies(response, access, refresh)
-    return UserResponse.model_validate(user)
+    return AuthUserResponse.from_user_and_token(user, access)
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=AuthUserResponse)
 async def login(
     payload: LoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_db),
-) -> UserResponse:
-    """Authenticate and set auth cookies."""
+) -> AuthUserResponse:
+    """Authenticate; set auth cookies and return access_token for cross-origin (e.g. Authorization header)."""
     service = AuthService(session)
     user = await service.authenticate_user(payload)
     if not user:
@@ -78,7 +78,7 @@ async def login(
         )
     access, refresh, _ = await service.create_tokens_for_user(user)
     _set_auth_cookies(response, access, refresh)
-    return UserResponse.model_validate(user)
+    return AuthUserResponse.from_user_and_token(user, access)
 
 
 @router.post("/refresh", response_model=TokenMessage)

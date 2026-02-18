@@ -1,5 +1,20 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+export const ACCESS_TOKEN_KEY = "access_token";
+
+function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setAccessToken(token: string): void {
+  if (typeof window !== "undefined") sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export function clearAccessToken(): void {
+  if (typeof window !== "undefined") sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
 type RequestInitWithCredentials = RequestInit & { credentials?: RequestCredentials };
 
 function parseApiError(detail: unknown): string {
@@ -18,14 +33,19 @@ async function request<T>(
   options: RequestInitWithCredentials = {}
 ): Promise<T> {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers as Record<string, string>),
-    },
+    headers,
   });
+  if (res.status === 401) clearAccessToken();
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const detail = (body as { detail?: unknown }).detail ?? res.statusText;

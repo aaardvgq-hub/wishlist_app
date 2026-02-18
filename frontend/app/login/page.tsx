@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, setAccessToken } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -21,11 +21,15 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const user = await api.post<{ id: string; email: string; is_active: boolean; created_at: string }>(
-        "/auth/login",
-        { email, password }
-      );
-      setUser(user);
+      const res = await api.post<{
+        id: string;
+        email: string;
+        is_active: boolean;
+        created_at: string;
+        access_token: string;
+      }>("/auth/login", { email, password });
+      setAccessToken(res.access_token);
+      setUser({ id: res.id, email: res.email, is_active: res.is_active, created_at: res.created_at });
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
