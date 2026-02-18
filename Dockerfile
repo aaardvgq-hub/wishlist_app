@@ -17,6 +17,7 @@ COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
+# PORT задаётся платформой (Railway и т.д.) или по умолчанию 8000 в app
 EXPOSE 8000
 
 ENTRYPOINT ["./entrypoint.sh"]
