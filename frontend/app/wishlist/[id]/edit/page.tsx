@@ -92,6 +92,7 @@ export default function EditWishlistPage() {
 
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900">Items</h2>
+        <p className="mt-1 text-xs text-gray-400">Click a card to view or edit. Image and description from product link.</p>
         {showAdd && (
           <div className="mt-4">
             <AddItemForm
