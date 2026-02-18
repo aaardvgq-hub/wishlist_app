@@ -74,7 +74,15 @@ export default function EditWishlistPage() {
             <p className="mt-1 text-sm text-gray-500">{wishlist.description}</p>
           )}
           <p className="mt-2 text-xs text-gray-400">
-            Share link: /public/{wishlist.share_token}
+            Share link:{" "}
+            <a
+              href={typeof window !== "undefined" ? `${window.location.origin}/public/${wishlist.share_token}` : `/public/${wishlist.share_token}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:underline break-all"
+            >
+              {typeof window !== "undefined" ? `${window.location.origin}/public/${wishlist.share_token}` : `/public/${wishlist.share_token}`}
+            </a>
           </p>
         </div>
         <Button onClick={() => router.push("/dashboard")} variant="secondary">

@@ -90,7 +90,20 @@ export default function DashboardPage() {
                     <p className="mt-1 line-clamp-2 text-sm text-gray-500">{w.description}</p>
                   )}
                   <p className="mt-2 text-xs text-gray-400">
-                    Share: /public/{w.share_token}
+                    Share:{" "}
+                    {typeof window !== "undefined" ? (
+                      <a
+                        href={`${window.location.origin}/public/${w.share_token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary-600 hover:underline break-all"
+                      >
+                        {window.location.origin}/public/{w.share_token}
+                      </a>
+                    ) : (
+                      <>/public/{w.share_token}</>
+                    )}
                   </p>
                 </Link>
               </li>
