@@ -20,7 +20,7 @@ export default function NewWishlistPage() {
     setError("");
     setLoading(true);
     try {
-      const w = await api.post<Wishlist>("/wishlists", {
+      const w = await api.post<Wishlist>("/wishlists/", {
         title: title.trim(),
         description: description.trim() || null,
         is_public: true,

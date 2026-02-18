@@ -19,7 +19,7 @@ export default function DashboardPage() {
   }, [fetchUser]);
   const { data: wishlists = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["wishlists"],
-    queryFn: () => api.get<Wishlist[]>("/wishlists"),
+    queryFn: () => api.get<Wishlist[]>("/wishlists/"),
     retry: 1,
   });
 

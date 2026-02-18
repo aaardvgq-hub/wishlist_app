@@ -26,7 +26,7 @@ export function AddItemForm({
     setError("");
     setLoading(true);
     try {
-      await api.post("/items", {
+      await api.post("/items/", {
         wishlist_id: wishlistId,
         title: title.trim(),
         product_url: productUrl.trim() || null,
