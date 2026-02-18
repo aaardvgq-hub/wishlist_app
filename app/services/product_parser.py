@@ -67,6 +67,15 @@ _OG_IMAGE_ALL_ALT = re.compile(
     r'<meta[^>]*\bcontent\s*=\s*(["\'])(.+?)\1[^>]*\bproperty\s*=\s*(["\'])og:image\3',
     re.IGNORECASE | re.DOTALL,
 )
+# Запасной вариант: тег содержит og:image и content= в любом порядке (WB, Ozon и др.)
+_OG_IMAGE_LOOSE_A = re.compile(
+    r'<meta[^>]*\bog:image\b[^>]*\bcontent\s*=\s*(["\'])(.+?)\1',
+    re.IGNORECASE | re.DOTALL,
+)
+_OG_IMAGE_LOOSE_B = re.compile(
+    r'<meta[^>]*\bcontent\s*=\s*(["\'])(.+?)\1[^>]*\bog:image\b',
+    re.IGNORECASE | re.DOTALL,
+)
 _TITLE_TAG = re.compile(r"<title[^>]*>\s*(.+?)\s*</title>", re.IGNORECASE | re.DOTALL)
 # Price: og:price, product:price:amount, itemprop="price", or name="price"
 _PRICE_PATTERNS = [
@@ -114,13 +123,20 @@ def _normalize_image_url(raw: str) -> str:
 def _extract_all_og_images(html: str) -> list[str]:
     """Все og:image из страницы (несколько тегов — WB, Ozon). Возвращаем нормализованные URL."""
     urls: list[str] = []
-    for pattern, content_group in ((_OG_IMAGE_ALL, 3), (_OG_IMAGE_ALL_ALT, 2)):
+    seen: set[str] = set()
+    for pattern, content_group in (
+        (_OG_IMAGE_ALL, 3),
+        (_OG_IMAGE_ALL_ALT, 2),
+        (_OG_IMAGE_LOOSE_A, 2),
+        (_OG_IMAGE_LOOSE_B, 2),
+    ):
         for m in pattern.finditer(html):
             if m.lastindex >= content_group:
                 raw = (m.group(content_group) or "").strip()
                 if raw:
                     u = _normalize_image_url(raw)
-                    if u and u not in urls:
+                    if u and u not in seen:
+                        seen.add(u)
                         urls.append(u)
     return urls
 
@@ -178,19 +194,22 @@ def _extract_price(html: str) -> Decimal | None:
 
 
 def _extract_meta_name_description(html: str) -> str | None:
-    """<meta name="description" content="..."> (в т.ч. с data-hid и др.), только после <title."""
+    """<meta name="description" content="..."> (в т.ч. data-hid). Сначала после <title, иначе в любом месте."""
     after_title = html
     idx = html.lower().find("<title")
     if idx != -1:
         after_title = html[idx + len("<title") :]
-    m = _META_NAME_DESCRIPTION.search(after_title)
-    if m and m.lastindex >= 2:
-        raw = (m.group(2) or "").strip()
-        return raw[:10000] if raw else None
-    m = _META_NAME_DESCRIPTION_ALT.search(after_title)
-    if m and m.lastindex >= 2:
-        raw = (m.group(2) or "").strip()
-        return raw[:10000] if raw else None
+    for haystack in (after_title, html):
+        m = _META_NAME_DESCRIPTION.search(haystack)
+        if m and m.lastindex >= 2:
+            raw = (m.group(2) or "").strip()
+            if raw:
+                return raw[:10000]
+        m = _META_NAME_DESCRIPTION_ALT.search(haystack)
+        if m and m.lastindex >= 2:
+            raw = (m.group(2) or "").strip()
+            if raw:
+                return raw[:10000]
     return None
 
 
@@ -252,11 +271,12 @@ async def fetch_product_preview(product_url: str) -> ProductPreview:
             return empty
     except Exception:
         return empty
+    timeout = min(TIMEOUT, 6.0)  # не ждём дольше 6 сек
     try:
         async with httpx.AsyncClient(
             follow_redirects=True,
-            timeout=httpx.Timeout(TIMEOUT),
-            headers={"User-Agent": "WishlistBot/1.0 (Product preview)"},
+            timeout=httpx.Timeout(timeout),
+            headers={"User-Agent": "Mozilla/5.0 (compatible; WishlistBot/1.0; +https://example.com)"},
         ) as client:
             response = await client.get(url)
             response.raise_for_status()

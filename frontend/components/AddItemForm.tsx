@@ -16,6 +16,7 @@ type ProductPreview = {
 };
 
 const DEBOUNCE_MS = 800;
+const PREVIEW_REQUEST_TIMEOUT_MS = 8000;
 
 export function AddItemForm({
   wishlistId,
@@ -36,22 +37,40 @@ export function AddItemForm({
   const [fetchingMeta, setFetchingMeta] = useState(false);
   const [error, setError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchMetadata = useCallback(async (url: string) => {
     if (!url.trim()) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setFetchingMeta(true);
     setError("");
+    const timeoutId = setTimeout(() => controller.abort(), PREVIEW_REQUEST_TIMEOUT_MS);
     try {
-      const preview = await api.get<ProductPreview>(
-        `/link-preview?url=${encodeURIComponent(url.trim())}`
-      );
+      const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const path = `/link-preview?url=${encodeURIComponent(url.trim())}`;
+      const res = await fetch(`${path.startsWith("http") ? path : base + path}`, {
+        signal: controller.signal,
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(typeof window !== "undefined" && sessionStorage.getItem("access_token") ? { Authorization: `Bearer ${sessionStorage.getItem("access_token")}` } : {}) },
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error("Preview failed");
+      const preview = (await res.json()) as ProductPreview;
       if (preview.description != null) setDescription(preview.description);
       if (preview.image_url != null) setImageUrl(preview.image_url);
       if (preview.price != null && preview.price !== "") setTargetPrice(String(preview.price));
-      if (!preview.image_url) setError(""); // image optional
-    } catch {
-      setError("Could not load link preview. Check the URL.");
+      if (!preview.image_url) setError("");
+    } catch (e) {
+      if (abortRef.current !== controller) return; // отменён из-за смены URL
+      if ((e as { name?: string })?.name === "AbortError") {
+        setError("Preview timed out. You can still add the item.");
+      } else {
+        setError("Could not load link preview. Check the URL.");
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setFetchingMeta(false);
     }
   }, []);
@@ -117,7 +136,7 @@ export function AddItemForm({
             placeholder="https://..."
             required
           />
-          {fetchingMeta && <p className="mt-1 text-xs text-gray-500">Loading description and image…</p>}
+          {fetchingMeta && <p className="mt-1 text-xs text-gray-500">Loading preview…</p>}
         </div>
         <div>
           <label className="mb-1 block text-sm text-gray-700">Description (from page meta)</label>
@@ -136,7 +155,7 @@ export function AddItemForm({
             <img src={imageUrl} alt="" className="h-32 w-full rounded-lg object-contain bg-gray-100" />
           ) : (
             <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-              {productUrl.trim() ? "Loading or no image on page…" : "Enter product URL above"}
+              {fetchingMeta ? "Loading preview…" : productUrl.trim() ? "No image on page" : "Enter product URL above"}
             </div>
           )}
         </div>
