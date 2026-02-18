@@ -1,8 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -e
 
-echo "Starting migrations..."
+# Alembic миграции
 alembic upgrade head
 
-echo "Starting backend..."
-exec uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Подставляем PORT по умолчанию (для локала)
+PORT=${PORT:-8000}
+
+# Запуск приложения
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
