@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Bind host")
     port: int = Field(default=8000, ge=1, le=65535, description="Bind port")
 
+    @field_validator("host")
+    @classmethod
+    def host_not_empty(cls, v: str) -> str:
+        """Ensure host is 0.0.0.0 when empty (e.g. Railway sets HOST='')."""
+        return v.strip() or "0.0.0.0"
+
     # Database (must use async driver: postgresql+asyncpg)
     database_url: str = Field(
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/wishlist",
