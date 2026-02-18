@@ -20,9 +20,8 @@ COPY app ./app
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-# Default: run app. For migrations-on-startup, use:
-# CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
-# force rebuild
-CMD ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8080"]
+COPY entrypoint.sh ./entrypoint.sh
+CMD ["./entrypoint.sh"]
+
 
 
