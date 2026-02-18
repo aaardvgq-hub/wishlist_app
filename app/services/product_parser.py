@@ -120,6 +120,39 @@ def _normalize_image_url(raw: str) -> str:
     return s[:2048]
 
 
+def _extract_content_from_meta_tag(tag: str) -> str | None:
+    """Из атрибута content= в произвольном теге meta извлечь значение (кавычки любые)."""
+    m = re.search(r'\bcontent\s*=\s*"([^"]*)"', tag, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"\bcontent\s*=\s*'([^']*)'", tag, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _extract_all_og_images_fallback(html: str) -> list[str]:
+    """Грубый проход: все <meta ... >, в которых есть og:image — вытащить content= (Ozon, WB и др.)."""
+    urls: list[str] = []
+    # Разбиваем по <meta и берём кусок до следующего >
+    parts = re.split(r"<meta\s", html, flags=re.IGNORECASE)
+    for i, part in enumerate(parts):
+        if i == 0:
+            continue
+        end = part.find(">")
+        if end == -1:
+            continue
+        tag = part[:end]
+        if "og:image" not in tag.lower():
+            continue
+        raw = _extract_content_from_meta_tag(tag)
+        if raw:
+            u = _normalize_image_url(raw)
+            if u and u not in urls:
+                urls.append(u)
+    return urls
+
+
 def _extract_all_og_images(html: str) -> list[str]:
     """Все og:image из страницы (несколько тегов — WB, Ozon). Возвращаем нормализованные URL."""
     urls: list[str] = []
@@ -138,6 +171,11 @@ def _extract_all_og_images(html: str) -> list[str]:
                     if u and u not in seen:
                         seen.add(u)
                         urls.append(u)
+    if not urls:
+        for u in _extract_all_og_images_fallback(html):
+            if u not in seen:
+                seen.add(u)
+                urls.append(u)
     return urls
 
 
@@ -193,6 +231,28 @@ def _extract_price(html: str) -> Decimal | None:
     return None
 
 
+def _extract_meta_name_description_fallback(html: str) -> str | None:
+    """Грубый проход: <meta> с name=description — вытащить content= (Ozon, WB)."""
+    parts = re.split(r"<meta\s", html, flags=re.IGNORECASE)
+    for i, part in enumerate(parts):
+        if i == 0:
+            continue
+        end = part.find(">")
+        if end == -1:
+            continue
+        tag = part[:end]
+        # name="description" или name='description' или data-hid и т.д.
+        if "description" not in tag.lower():
+            continue
+        # проверяем, что это именно name=description (а не og:description и т.д.)
+        if not re.search(r"\bname\s*=\s*([\"'])description\1", tag, re.IGNORECASE):
+            continue
+        raw = _extract_content_from_meta_tag(tag)
+        if raw:
+            return raw[:10000]
+    return None
+
+
 def _extract_meta_name_description(html: str) -> str | None:
     """<meta name="description" content="..."> (в т.ч. data-hid). Сначала после <title, иначе в любом месте."""
     after_title = html
@@ -210,7 +270,7 @@ def _extract_meta_name_description(html: str) -> str | None:
             raw = (m.group(2) or "").strip()
             if raw:
                 return raw[:10000]
-    return None
+    return _extract_meta_name_description_fallback(html)
 
 
 def _parse_html(html: str, product_url: str) -> ProductPreview:
@@ -276,7 +336,11 @@ async def fetch_product_preview(product_url: str) -> ProductPreview:
         async with httpx.AsyncClient(
             follow_redirects=True,
             timeout=httpx.Timeout(timeout),
-            headers={"User-Agent": "Mozilla/5.0 (compatible; WishlistBot/1.0; +https://example.com)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+            },
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
