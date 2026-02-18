@@ -41,6 +41,14 @@ _OG_IMAGE_ALT = re.compile(
     r'<meta[^>]+content=(["\'])(.+?)\1[^>]+property=(["\'])og:image\3',
     re.IGNORECASE | re.DOTALL,
 )
+_OG_DESCRIPTION = re.compile(
+    r'<meta[^>]+property=(["\'])og:description\1[^>]+content=(["\'])(.+?)\2',
+    re.IGNORECASE | re.DOTALL,
+)
+_OG_DESCRIPTION_ALT = re.compile(
+    r'<meta[^>]+content=(["\'])(.+?)\1[^>]+property=(["\'])og:description\3',
+    re.IGNORECASE | re.DOTALL,
+)
 _TITLE_TAG = re.compile(r"<title[^>]*>\s*(.+?)\s*</title>", re.IGNORECASE | re.DOTALL)
 # Price: og:price, product:price:amount, itemprop="price", or name="price"
 _PRICE_PATTERNS = [
@@ -121,26 +129,31 @@ def _parse_html(html: str, product_url: str) -> ProductPreview:
     """Parse first MAX_BYTES of HTML into ProductPreview with preview_quality and missing_fields."""
     title = _extract_og(html, _OG_TITLE, _OG_TITLE_ALT) or _extract_title_tag(html)
     image_url = _extract_og(html, _OG_IMAGE, _OG_IMAGE_ALT)
+    description = _extract_og(html, _OG_DESCRIPTION, _OG_DESCRIPTION_ALT)
     price = _extract_price(html)
     has_title = bool(title)
     has_image = bool(image_url)
+    has_description = bool(description)
     has_price = price is not None
     missing: list[str] = []
     if not has_title:
         missing.append("title")
     if not has_image:
         missing.append("image_url")
+    if not has_description:
+        missing.append("description")
     if not has_price:
         missing.append("price")
     if has_title and has_image and has_price:
         quality = "full"
-    elif has_title or has_image or has_price:
+    elif has_title or has_image or has_price or has_description:
         quality = "partial"
     else:
         quality = "minimal"
     return ProductPreview(
         title=title[:500] if title else None,
         image_url=image_url[:2048] if image_url else None,
+        description=description[:10000] if description else None,
         price=price,
         product_url=product_url[:2048] if product_url else None,
         preview_quality=quality,
@@ -154,7 +167,7 @@ async def fetch_product_preview(product_url: str) -> ProductPreview:
     On any error (timeout, non-2xx, decode, etc.) returns an empty ProductPreview (no exception).
     Does not block event loop.
     """
-    empty = ProductPreview(preview_quality="minimal", missing_fields=["title", "image_url", "price"])
+    empty = ProductPreview(preview_quality="minimal", missing_fields=["title", "image_url", "description", "price"])
     if not product_url or not product_url.strip():
         return empty
     url = product_url.strip()
@@ -179,4 +192,4 @@ async def fetch_product_preview(product_url: str) -> ProductPreview:
             return _parse_html(text, url)
     except Exception as e:
         logger.info("product_parser_failed", extra={"url": url[:500], "error": str(e)})
-        return ProductPreview(preview_quality="minimal", missing_fields=["title", "image_url", "price"])
+        return ProductPreview(preview_quality="minimal", missing_fields=["title", "image_url", "description", "price"])

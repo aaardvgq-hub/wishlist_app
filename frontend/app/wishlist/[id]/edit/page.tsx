@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { WishlistWithItems } from "@/lib/types";
+import type { WishItem, WishlistWithItems } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { AddItemForm } from "@/components/AddItemForm";
+import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { EditWishlistSkeleton } from "@/components/ui/Skeleton";
 
 export default function EditWishlistPage() {
@@ -17,6 +19,7 @@ export default function EditWishlistPage() {
   const queryClient = useQueryClient();
   const id = params.id as string;
   const showAdd = searchParams.get("add") === "1";
+  const [selectedItem, setSelectedItem] = useState<WishItem | null>(null);
 
   const { data: wishlist, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["wishlist", id],
@@ -28,10 +31,10 @@ export default function EditWishlistPage() {
   const items = wishlist?.items?.filter((i) => !i.is_deleted) ?? [];
 
   async function handleDeleteItem(itemId: string) {
-    if (!confirm("Remove this item?")) return;
     try {
       await api.delete(`/items/${itemId}`);
       queryClient.invalidateQueries({ queryKey: ["wishlist", id] });
+      setSelectedItem(null);
     } catch {
       // could show toast
     }
@@ -106,27 +109,48 @@ export default function EditWishlistPage() {
         ) : !showAdd ? (
           <ul className="mt-4 space-y-3">
             {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900">{item.title}</p>
-                  {item.target_price && item.target_price !== "0" && (
-                    <p className="text-sm text-gray-500">Target: {item.target_price}</p>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  className="text-red-600 hover:bg-red-50"
-                  onClick={() => handleDeleteItem(item.id)}
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(item)}
+                  className="flex w-full items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 text-left transition hover:border-primary-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
                 >
-                  Remove
-                </Button>
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt=""
+                      className="h-16 w-16 shrink-0 rounded-lg object-cover bg-gray-100"
+                    />
+                  ) : (
+                    <div className="h-16 w-16 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
+                      No image
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900">{item.title}</p>
+                    {item.description && (
+                      <p className="mt-0.5 line-clamp-2 text-sm text-gray-500">{item.description}</p>
+                    )}
+                    {item.target_price && item.target_price !== "0" && (
+                      <p className="mt-1 text-sm text-gray-500">Target: {item.target_price}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-sm text-gray-400">Open →</span>
+                </button>
               </li>
             ))}
           </ul>
         ) : null}
+        {selectedItem && (
+          <ItemDetailModal
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ["wishlist", id] });
+            }}
+            onDelete={() => handleDeleteItem(selectedItem.id)}
+          />
+        )}
         {!showAdd && items.length > 0 && (
           <div className="mt-4">
             <Button onClick={() => router.push(`/wishlist/${id}/edit?add=1`)}>

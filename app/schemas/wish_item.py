@@ -50,11 +50,12 @@ class ProductPreviewRequest(BaseModel):
 
 
 class ProductPreview(BaseModel):
-    """Structured product preview from URL (og:title, og:image, price, title fallback)."""
+    """Structured product preview from URL (og:title, og:image, og:description, price, title fallback)."""
 
     title: str | None = None
     image_url: str | None = None
+    description: str | None = None
     price: Decimal | None = None
     product_url: str | None = None
     preview_quality: Literal["full", "partial", "minimal"] = "minimal"
-    missing_fields: list[str] = Field(default_factory=list, description="Fields we could not extract (title, image_url, price)")
+    missing_fields: list[str] = Field(default_factory=list, description="Fields we could not extract (title, image_url, description, price)")
