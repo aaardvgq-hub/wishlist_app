@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e
 
-# Если PORT не задан — дефолт 8080
+# Берём порт из окружения Railway, если не задан — дефолт 8080
 PORT=${PORT:-8080}
 
-# Применяем миграции
+echo "Starting migrations..."
 alembic upgrade head
 
-# Запускаем сервер на нужном порту
+echo "Starting Uvicorn on port $PORT..."
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+chmod +x entrypoint.sh
