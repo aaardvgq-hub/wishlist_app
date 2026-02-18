@@ -40,7 +40,9 @@ export function EditItemForm({
     setFetchingMeta(true);
     setError("");
     try {
-      const preview = await api.post<ProductPreview>("/items/preview", { product_url: url });
+      const preview = await api.get<ProductPreview>(
+        `/link-preview?url=${encodeURIComponent(url)}`
+      );
       if (preview.title) setTitle(preview.title);
       if (preview.description) setDescription(preview.description);
       if (preview.image_url) setImageUrl(preview.image_url);

@@ -42,13 +42,15 @@ export function AddItemForm({
     setFetchingMeta(true);
     setError("");
     try {
-      const preview = await api.post<ProductPreview>("/items/preview", { product_url: url.trim() });
+      const preview = await api.get<ProductPreview>(
+        `/link-preview?url=${encodeURIComponent(url.trim())}`
+      );
       if (preview.description != null) setDescription(preview.description);
       if (preview.image_url != null) setImageUrl(preview.image_url);
       if (preview.price != null && preview.price !== "") setTargetPrice(String(preview.price));
-      if (!preview.image_url) setError("No preview image on this page. Use a product link with an image (e.g. shop or Telegram preview).");
+      if (!preview.image_url) setError("No preview image. Use a link with og:image (e.g. shop, Telegram).");
     } catch {
-      setError("Could not load page metadata. Check the URL.");
+      setError("Could not load link preview. Check the URL.");
     } finally {
       setFetchingMeta(false);
     }
@@ -60,6 +62,7 @@ export function AddItemForm({
       setDescription("");
       setImageUrl("");
       setError("");
+      setTargetPrice("");
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);

@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routers import auth, health, items, users, wishlists, ws
+from app.api.routers import auth, health, items, link_preview, users, wishlists, ws
 from app.core.config import get_settings
 from app.core.database import close_db
 from app.middleware.rate_limit import PublicWishlistRateLimitMiddleware
@@ -117,6 +117,7 @@ app.add_middleware(PublicWishlistRateLimitMiddleware)
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(link_preview.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 app.include_router(wishlists.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
